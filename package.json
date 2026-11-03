@@ -1,0 +1,43 @@
+{
+  "name": "@local/dsh-stylelab",
+  "version": "0.8.2",
+  "type": "module",
+  "packageManager": "pnpm@11.28.5",
+  "description": "风格工坊：原生主题、复古装饰和中英文字体组合。",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=22.14.0", "dsh": "^0.2.1-rc.5" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/build.mjs && node --test tests/*.test.mjs",
+    "prepack": "node scripts/build.mjs && node --test tests/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./fonts": "./simple-fonts-host.js",
+    "./font-combinations": "./simple-fonts-host.js",
+    "./maple-fonts": "./simple-fonts-host.js",
+    "./simple-fonts": "./simple-fonts-host.js",
+    "./simple-fonts/locale/*.json": "./fonts/locale/*.json",
+    "./simple-fonts/icon": "./icon.svg",
+    "./maple-fonts/locale/*.json": "./fonts/locale/*.json",
+    "./maple-fonts/icon": "./icon.svg",
+    "./font-combinations/locale/*.json": "./fonts/locale/*.json",
+    "./font-combinations/icon": "./icon.svg",
+    "./fonts/locale/*.json": "./fonts/locale/*.json",
+    "./fonts/icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "simple-fonts-host.js", "simple-fonts-core.js", "simple-font-languages.json", "fonts/maple-NOTICE.md", "fonts/OFL-Maple.txt", "fonts/locale/*.json", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "LICENSE", "scripts/*.mjs", "tests/*.test.mjs"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-renderer", "@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-api-remotes"]
+    }
+  }
+}

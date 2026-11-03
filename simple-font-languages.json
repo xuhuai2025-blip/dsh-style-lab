@@ -1,0 +1,10 @@
+{
+  "english": [
+    { "id": "default", "text": "Segoe UI", "code": "Consolas", "terminal": "Consolas" },
+    { "id": "maple", "text": "Maple Mono NF CN Latin", "code": "Maple Mono NF CN Latin", "terminal": "Maple Mono NF CN Latin" }
+  ],
+  "chinese": [
+    { "id": "default", "family": "Microsoft YaHei UI" },
+    { "id": "maple", "family": "Maple Mono NF CN" }
+  ]
+}

@@ -1,0 +1,5 @@
+- insert:
+    - id: local-stylelab
+      name: '@local/dsh-stylelab'
+    - id: local-stylelab-fonts
+      name: '@local/dsh-stylelab/simple-fonts'
