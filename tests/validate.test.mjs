@@ -33,7 +33,7 @@ function contrast(a, b) {
 }
 
 test('bundle exports all linked distribution resources without install scripts', () => {
-  assert.equal(manifest.name, '@local/dsh-stylelab');
+  assert.equal(manifest.name, 'dsh-style-lab');
   assert.equal(manifest.version, '0.8.2');
   assert.equal(manifest.dsh.client.platform, 'web');
   assert.ok(manifest.scripts.build);

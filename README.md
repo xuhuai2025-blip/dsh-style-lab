@@ -1,6 +1,12 @@
-# 风格工坊 · StyleLab
+# dsh-style-lab · 风格工坊
 
-DeepSeek Harness 原生侧边栏插件，提供三套主题、配套装饰与独立的中英文字体选择。包名为 `@local/dsh-stylelab`，无第三方运行时 npm 依赖、无安装脚本、无外部网络资源。
+DeepSeek Harness 原生侧边栏插件，提供三套主题、配套装饰与独立的中英文字体选择。包名为 `dsh-style-lab`，无第三方运行时 npm 依赖、无安装脚本、无外部网络资源。
+
+## AI 生成与创意参考
+
+本插件的原创插件代码、界面、图标、文档及测试**全部由 AI 生成**。创意与交互参考 DeepSeek Harness 官方宣传片所展示的插件创作能力；平台信息见 [DeepSeek Harness 官方介绍](https://www.deepseek.com/zh/harness/) 与 [官方源码](https://github.com/deepseek-ai/deepseek-harness)。本项目是**非官方插件**，不代表 DeepSeek 或上游项目，未获得其背书；请在使用前自行审查并验证。
+
+AI 生成声明仅适用于本插件原创内容，不包括宿主或第三方资源。Maple Mono 等上游资源及其许可归原权利人所有，继续遵守文末的独立许可说明。
 
 ## 安装与使用
 

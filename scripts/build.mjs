@@ -43,7 +43,7 @@ export function validatePackage() {
   }
   assert.match(text('LICENSE'), /MIT License[\s\S]*StyleLab contributors/);
   assert.match(text('fonts/OFL-Maple.txt'), /SIL OPEN FONT LICENSE Version 1\.1/);
-  assert.match(text(manifest.dsh.bundle.patch.replace(/^\.\//, '')), /name: '@local\/dsh-stylelab\/simple-fonts'/);
+  assert.match(text(manifest.dsh.bundle.patch.replace(/^\.\//, '')), /name: 'dsh-style-lab\/simple-fonts'/);
   for (const file of included) {
     assert.doesNotMatch(file, /(?:^|\/)(?:node_modules|font-sources|\.git)(?:\/|$)|\.(?:ttf|otf|woff2?|tgz|log)$/i);
     if (file.endsWith('.json')) JSON.parse(text(file));

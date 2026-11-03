@@ -1,5 +1,5 @@
 {
-  "name": "@local/dsh-stylelab",
+  "name": "dsh-style-lab",
   "version": "0.8.2",
   "type": "module",
   "packageManager": "pnpm@11.28.5",

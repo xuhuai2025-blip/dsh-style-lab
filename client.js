@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@local/dsh-stylelab',
+  id: 'dsh-style-lab',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

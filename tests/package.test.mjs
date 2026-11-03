@@ -7,17 +7,36 @@ import * as current from '../simple-fonts-host.js';
 const root = new URL('../', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
 
+test('package name, browser module ID and bundle entries share the unscoped release name', () => {
+  assert.equal(manifest.name, 'dsh-style-lab');
+  assert.match(manifest.name, /^dsh-[a-z]+-[a-z]+$/);
+  const browser = readFileSync(new URL('client.js', root), 'utf8');
+  assert.equal(browser.match(/\bid:\s*'([^']+)'/)[1], manifest.name);
+  const patch = readFileSync(new URL('cordis.patch.yml', root), 'utf8');
+  assert.deepEqual([...patch.matchAll(/name:\s*'([^']+)'/g)].map(match => match[1]),
+    [manifest.name, `${manifest.name}/simple-fonts`]);
+});
+
+test('README identifies AI-generated original work and upstream resources without official endorsement', () => {
+  const readme = readFileSync(new URL('README.md', root), 'utf8');
+  assert.match(readme, /^# dsh-style-lab · 风格工坊/m);
+  assert.ok(readme.includes('原创插件代码、界面、图标、文档及测试**全部由 AI 生成**'));
+  for (const statement of ['官方宣传片', 'https://www.deepseek.com/zh/harness/',
+    'https://github.com/deepseek-ai/deepseek-harness', '非官方插件', '未获得其背书',
+    '不包括宿主或第三方资源', 'Maple Mono', '独立许可']) assert.ok(readme.includes(statement), statement);
+});
+
 // Tests resolve the public package API, not removed implementation filenames.
 for (const entry of ['fonts', 'font-combinations', 'maple-fonts', 'simple-fonts']) {
   test(`public ${entry} compatibility entry resolves to the one supported implementation`, async () => {
-    const api = await import(`@local/dsh-stylelab/${entry}`);
+    const api = await import(`dsh-style-lab/${entry}`);
     for (const name of ['apply', 'inject', 'createFontActions']) assert.equal(api[name], current[name]);
     for (const language of ['en', 'zh']) {
-      const resolved = import.meta.resolve(`@local/dsh-stylelab/${entry}/locale/${language}.json`);
+      const resolved = import.meta.resolve(`dsh-style-lab/${entry}/locale/${language}.json`);
       assert.deepEqual(JSON.parse(readFileSync(new URL(resolved), 'utf8')),
         JSON.parse(readFileSync(new URL(`fonts/locale/${language}.json`, root), 'utf8')));
     }
-    assert.equal(import.meta.resolve(`@local/dsh-stylelab/${entry}/icon`), new URL('icon.svg', root).href);
+    assert.equal(import.meta.resolve(`dsh-style-lab/${entry}/icon`), new URL('icon.svg', root).href);
   });
 }
 
