@@ -1,6 +1,6 @@
 # dsh-style-lab · 风格工坊
 
-DeepSeek Harness 原生侧边栏插件，提供三套主题、配套装饰与独立的中英文字体选择。包名为 `dsh-style-lab`，无第三方运行时 npm 依赖、无安装脚本、无外部网络资源。
+DeepSeek Harness 原生侧边栏插件，提供三套主题、配套装饰、启动时自动恢复上次皮肤与独立的中英文字体选择。包名为 `dsh-style-lab`，仅使用宿主提供的 Schemastery peer，无额外运行时依赖、无安装脚本、无外部网络资源。
 
 ## AI 生成与创意参考
 
@@ -21,7 +21,11 @@ AI 生成声明仅适用于本插件原创内容，不包括宿主或第三方�
 
 主题覆盖 14 个公开颜色令牌。装饰不参与点击，保留原生导航、聊天布局及消息/代码背景。模糊仅施加于叶级表面，侧栏根容器不添加滤镜，以免改变固定窗口控件的定位参照。
 
-第三方主题与雾蓝装饰仅在当前页面运行时生效；整页刷新回到已保存的原生外观，装饰恢复默认。设置同步时，主题保护使用公开 `configForms` 快照及受控微任务恢复当前仍注册的自定义主题；显式原生外观选择、真实持久偏好变化和卸载优先。插件不会写入持久外观或额外存储。
+皮肤与雾蓝装饰在选择时保存到当前 Harness profile 的原生设置命名空间 `local-stylelab`，字段为 `skinId` 与 `mistMode`。刷新页面或退出重启 Harness 后，插件等待自身设置和原生外观设置均就绪，再恢复上次皮肤；雾蓝装饰先于主题恢复，无需重新打开风格工坊。选择「默认」会记住跟随系统；原生设置中的浅色／深色选择也会被尊重。首次安装的 `native` 状态不覆盖已有原生外观。
+
+使用原生 volatile Config 与 revision-aware 字段 mutation，只保存自己的两个字段，不修改字体或模型，不另建状态文件或使用浏览器 localStorage。设置同步仍由主题保护及受控微任务处理；后台采用、主题注销和卸载不覆盖已保存的选择。快速连续选择按最新本地意图保存，保存失败会提示当前仅临时应用，并提供「重试保存」。
+
+代理工具 `stylelab_skin` 提供 `get`（值、目录、修订号）和 `set`（部分更新，可携带 `expectedRevision` 防止并发覆盖），与页面使用同一个原生设置 mutation。设置随 profile 隔离，不依赖本次启动的网页端口。
 
 ## 字体与可移植性
 
@@ -59,15 +63,14 @@ Cordis/slot effect 在停用时清理面板、字典、主题注册、样式和�
 
 ## 开发与验证
 
-需要 Node.js **22.14 或更新版本**及 pnpm 11。从源码仓库的本插件目录执行；安装步骤仅校验空依赖锁文件，不下载第三方包：
+需要 Node.js **22.14 或更新版本**。构建与领域测试仅依赖 Node 内置模块，无需安装依赖；从本插件目录执行：
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm run build
-pnpm test
-pnpm run check
-pnpm pack
+node scripts/build.mjs
+node --test tests/*.test.mjs
 ```
+
+也提供 pnpm 11 的 `run build`、`test`、`run check`、`pack` 脚本。随包的单项目 `pnpm-workspace.yaml` 关闭自动安装 peer，避免 pnpm 11 在运行脚本前下载宿主库。Schemastery `~3.18.5` 由 Harness 的 peer-aware 解析器提供；独立 Node 只做 Host 入口语法检查，不直接执行该入口。
 
 源码已是宿主可直接加载的 JavaScript；`build` 做语法、资源和独立包依赖校验，不生成 `dist`，不编译或修改宿主。`test` 使用内置 `node:test`，只运行包内测试；`check` 合并两者。`prepack` 在打包前再次执行完整校验。发布前可另运行 `npm pack --dry-run` 检查白名单，无需生成归档。
 

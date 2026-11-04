@@ -113,13 +113,14 @@ window.__ModuleLoader__.load({
       return before.preference;
     }
     // Domain adapter only: no polling, persistence, DOM changes or service interception.
-    function createThemeRefreshGuard(theme, form, listen, defer) {
+    function createThemeRefreshGuard(theme, form, listen, defer, onAcceptedSelection = () => {}) {
       let active = true;
       let previous = theme.getTheme();
       let previousScope = form.getSnapshot();
       let selectedId = THEMES.some(item => item.id === previous.preference) ? previous.preference : null;
       let pending = null;
       let scheduled = false;
+      let expectedSelection = null;
       const isOwned = id => THEMES.some(item => item.id === id);
       const isRegistered = (snapshot, id) => snapshot.themes?.some(item => item.id === id) === true;
       function scheduleRestore() {
@@ -139,6 +140,16 @@ window.__ModuleLoader__.load({
       const unsubscribe = listen(snapshot => {
         if (!active) return;
         const scope = form.getSnapshot();
+        const native = ['system', 'light', 'dark'];
+        const expected = snapshot.preference === expectedSelection;
+        expectedSelection = null;
+        const explicit = !expected && snapshot.preference !== selectedId && snapshot.preference !== previous.preference
+          && snapshot.fontFamilies === previous.fontFamilies && snapshot.fontSizes === previous.fontSizes
+          && (native.includes(previous.preference) || isRegistered(snapshot, previous.preference));
+        const durableAppearanceChange = snapshot.preference !== previous.preference
+          && previousScope.status === 'ready' && scope.status === 'ready'
+          && native.includes(previousScope.value?.preference) && native.includes(scope.value?.preference)
+          && previousScope.value.preference !== scope.value.preference && snapshot.preference === scope.value.preference;
         const restore = selectedId ? customThemeForSettingsRefresh({ ...previous, preference: selectedId }, snapshot, previousScope, scope) : null;
         if (isOwned(snapshot.preference)) {
           selectedId = snapshot.preference;
@@ -156,10 +167,12 @@ window.__ModuleLoader__.load({
         previous = snapshot;
         previousScope = scope;
         scheduleRestore();
+        if (explicit || durableAppearanceChange) onAcceptedSelection(isOwned(snapshot.preference) || native.includes(snapshot.preference) ? snapshot.preference : 'native');
       });
       return {
         onSelection(id) {
           if (!active) return;
+          expectedSelection = id;
           pending = null;
           selectedId = isOwned(id) ? id : null;
           previous = theme.getTheme();
@@ -174,9 +187,125 @@ window.__ModuleLoader__.load({
         }
       };
     }
+    const SAVED_SKIN_IDS = ['native', 'system', 'light', 'dark', ...THEMES.map(theme => theme.id)];
+    function createSkinPersistence(form, nativeForm, theme, noteThemeSelection, applyMist, notifyStatus = () => {}) {
+      let active = true;
+      let hydrated = false;
+      let accepted = null;
+      let generation = 0;
+      let dirty = {};
+      let saving = false;
+      let blocked = false;
+      let error = '';
+      let status = Object.freeze({ saving: false, error: '', pending: false });
+      const listeners = new Set();
+      function publish() {
+        if (!active) return;
+        const pending = Object.keys(dirty).length > 0;
+        if (status.saving === saving && status.error === error && status.pending === pending) return;
+        status = Object.freeze({ saving, error, pending });
+        for (const listener of listeners) listener();
+        notifyStatus(status);
+      }
+      function applySkin(id, initial) {
+        if (id === 'native' && initial) return;
+        const target = id === 'native' ? nativeForm.getSnapshot().value?.preference : id;
+        const current = theme.getTheme();
+        if (!['system', 'light', 'dark'].includes(target) && !current.themes?.some(item => item.id === target)) return;
+        if (current.preference === target) return;
+        noteThemeSelection(target);
+        theme.setTheme(target);
+      }
+      function ready() {
+        return form.getSnapshot().status === 'ready' && nativeForm.getSnapshot().status === 'ready';
+      }
+      function sync() {
+        if (!active) return;
+        const snapshot = form.getSnapshot();
+        if (snapshot.status === 'unavailable') {
+          error = 'Skin settings unavailable'; publish(); return;
+        }
+        if (!ready()) { publish(); return; }
+        const value = snapshot.value;
+        if (!value || !SAVED_SKIN_IDS.includes(value.skinId) || !MIST_STYLES.includes(value.mistMode)) {
+          error = 'Invalid saved skin preferences'; publish(); return;
+        }
+        if (error === 'Skin settings unavailable' || error === 'Invalid saved skin preferences') error = '';
+        const initial = !hydrated;
+        const changedSkin = initial || value.skinId !== accepted.skinId;
+        const changedMode = initial || value.mistMode !== accepted.mistMode;
+        accepted = { skinId: value.skinId, mistMode: value.mistMode };
+        hydrated = true;
+        // Hydrate the accent first so a restored Mist theme never paints the wrong variant.
+        if (initial || (changedMode && !dirty.mistMode)) applyMist(dirty.mistMode?.value ?? value.mistMode);
+        if (initial || (changedSkin && !dirty.skinId)) applySkin(dirty.skinId?.value ?? value.skinId, initial && !dirty.skinId);
+        publish();
+        void drain();
+      }
+      async function drain() {
+        if (!active || saving || blocked || !ready() || !Object.keys(dirty).length) return;
+        const snapshot = form.getSnapshot();
+        if (snapshot.writable !== true) {
+          error = 'Skin settings are read-only'; blocked = true; publish(); return;
+        }
+        for (const [field, intent] of Object.entries(dirty)) {
+          if (snapshot.value?.[field] === intent.value) delete dirty[field];
+        }
+        if (!Object.keys(dirty).length) { error = ''; publish(); return; }
+        const batch = { ...dirty };
+        const ops = Object.entries(batch).map(([field, intent]) => ({ op: 'set', path: [field], value: intent.value }));
+        saving = true; error = ''; publish();
+        let failure = '';
+        try {
+          if (await form.mutate(ops) !== true) failure = 'Skin preference save failed';
+        } catch (caught) {
+          failure = caught instanceof Error ? caught.message : 'Skin preference save failed';
+        }
+        if (!active) return;
+        saving = false;
+        if (!failure) {
+          for (const [field, intent] of Object.entries(batch)) {
+            if (dirty[field]?.generation === intent.generation) delete dirty[field];
+          }
+          error = '';
+        } else {
+          const newer = Object.entries(dirty).some(([field, intent]) => !batch[field] || batch[field].generation !== intent.generation);
+          blocked = !newer;
+          error = newer ? '' : failure;
+        }
+        publish();
+        sync();
+      }
+      const unsubscribe = form.subscribe(sync);
+      const unsubscribeNative = nativeForm.subscribe(sync);
+      sync();
+      return {
+        getSnapshot: () => status,
+        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+        remember(patch) {
+          if (!patch || typeof patch !== 'object' || Array.isArray(patch) || !Object.keys(patch).length
+            || Object.keys(patch).some(field => !['skinId', 'mistMode'].includes(field))
+            || ('skinId' in patch && !SAVED_SKIN_IDS.includes(patch.skinId))
+            || ('mistMode' in patch && !MIST_STYLES.includes(patch.mistMode))) throw new Error('Invalid skin preference selection');
+          if (!active) return;
+          for (const [field, value] of Object.entries(patch)) {
+            if (dirty[field]?.value === value) continue;
+            if (!dirty[field] && form.getSnapshot().value?.[field] === value) continue;
+            dirty[field] = { value, generation: ++generation };
+          }
+          blocked = false; error = ''; sync();
+        },
+        retry() { if (active) { blocked = false; error = ''; sync(); } },
+        dispose() {
+          if (!active) return;
+          active = false; dirty = {};
+          unsubscribe(); unsubscribeNative(); listeners.clear();
+        }
+      };
+    }
     const DICTS = {
-      en: { title: '风格工坊', oat: 'Oat Parchment', mist: 'Mist Glow', notebook: 'Ivory Notebook', system: 'Default', select: 'Select', selected: 'Selected', error: 'Retry', preview: 'Theme preview', hello: 'Hello, DeepSeek.', reply: 'How can I help you?', techDecoration: 'Decoration', vintage: 'Vintage Tape', hud: 'Starlit Traces', circuit: 'Micro Circuits', pageglow: 'Page Keepsakes', fonts: 'Global font', fontDefault: 'System default', fontMaple: 'Maple Mono NF CN', fontEnglish: 'English font', fontChinese: 'Chinese font', fontApply: 'Apply fonts', fontReset: 'Default fonts', fontCustom: 'Custom (system settings)', fontChineseSample: '让灵感自然流动。', fontEnglishSample: 'Make something wonderful.', fontSaving: 'Saving…', fontFailed: 'Font change failed', fontRetry: 'Retry', fontUnavailable: 'Font settings unavailable' },
-      zh: { title: '风格工坊', oat: '燕麦暖笺', mist: '雾蓝微光', system: '默认', notebook: '素纸手札', select: '选择', selected: '已选择', error: '重试', preview: '主题预览', hello: '你好，DeepSeek。', reply: '有什么可以帮你？', techDecoration: '装饰', vintage: '复古胶带', hud: '星轨浮光', circuit: '微型电路', pageglow: '书页拾光', fonts: '全局字体', fontDefault: '系统默认', fontMaple: 'Maple Mono NF CN', fontEnglish: '英文字体', fontChinese: '中文字体', fontApply: '应用字体', fontReset: '恢复默认', fontCustom: '自定义（系统设置）', fontChineseSample: '让灵感自然流动。', fontEnglishSample: 'Make something wonderful.', fontSaving: '保存中…', fontFailed: '字体切换失败', fontRetry: '重试', fontUnavailable: '字体设置暂不可用' }
+      en: { title: '风格工坊', oat: 'Oat Parchment', mist: 'Mist Glow', notebook: 'Ivory Notebook', system: 'Default', select: 'Select', selected: 'Selected', error: 'Retry', preview: 'Theme preview', hello: 'Hello, DeepSeek.', reply: 'How can I help you?', techDecoration: 'Decoration', vintage: 'Vintage Tape', hud: 'Starlit Traces', circuit: 'Micro Circuits', pageglow: 'Page Keepsakes', fonts: 'Global font', fontDefault: 'System default', fontMaple: 'Maple Mono NF CN', fontEnglish: 'English font', fontChinese: 'Chinese font', fontApply: 'Apply fonts', fontReset: 'Default fonts', fontCustom: 'Custom (system settings)', fontChineseSample: '让灵感自然流动。', fontEnglishSample: 'Make something wonderful.', fontSaving: 'Saving…', fontFailed: 'Font change failed', fontRetry: 'Retry', fontUnavailable: 'Font settings unavailable', skinSaveFailed: 'Skin applied for now; saving failed.', skinRetry: 'Retry save' },
+      zh: { title: '风格工坊', oat: '燕麦暖笺', mist: '雾蓝微光', system: '默认', notebook: '素纸手札', select: '选择', selected: '已选择', error: '重试', preview: '主题预览', hello: '你好，DeepSeek。', reply: '有什么可以帮你？', techDecoration: '装饰', vintage: '复古胶带', hud: '星轨浮光', circuit: '微型电路', pageglow: '书页拾光', fonts: '全局字体', fontDefault: '系统默认', fontMaple: 'Maple Mono NF CN', fontEnglish: '英文字体', fontChinese: '中文字体', fontApply: '应用字体', fontReset: '恢复默认', fontCustom: '自定义（系统设置）', fontChineseSample: '让灵感自然流动。', fontEnglishSample: 'Make something wonderful.', fontSaving: '保存中…', fontFailed: '字体切换失败', fontRetry: '重试', fontUnavailable: '字体设置暂不可用', skinSaveFailed: '皮肤已临时应用，但保存失败。', skinRetry: '重试保存' }
     };
     const CSS = `
 .sl-page{height:100%;min-height:0;overflow:auto;box-sizing:border-box;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
@@ -376,22 +505,40 @@ ${control}{font-family:var(--dsh-font-family-text,inherit);background:var(--dsw-
         for (const definition of THEMES) ctx.effect(() => ctx.theme.register(definition));
         const t = ctx.locale.bind('stylelab');
         let noteThemeSelection = () => {};
+        let skinPreferences = null;
         ctx.effect(() => {
           const guard = createThemeRefreshGuard(ctx.theme, ctx.configForms.get('ui-theme'),
-            listener => ctx.on('theme/change', listener), queueMicrotask);
+            listener => ctx.on('theme/change', listener), queueMicrotask,
+            id => skinPreferences?.remember({ skinId: id }));
           noteThemeSelection = guard.onSelection;
           return () => { noteThemeSelection = () => {}; guard.dispose(); };
         });
-        // Only the two Mist variations need mutable, page-local selection state.
+        // Immediate view state mirrors the native persisted Mist preference.
         let mistDecoration = 'hud';
         const mistListeners = new Set();
         const getMistDecoration = () => mistDecoration;
         const subscribeMistDecoration = listener => { mistListeners.add(listener); return () => mistListeners.delete(listener); };
         ctx.effect(() => () => mistListeners.clear());
-        function setMistDecoration(value) {
+        function applyMistDecoration(value) {
           if (!MIST_STYLES.includes(value) || value === mistDecoration) return;
           mistDecoration = value;
           for (const listener of mistListeners) listener();
+        }
+        function setMistDecoration(value) {
+          if (!MIST_STYLES.includes(value)) return;
+          applyMistDecoration(value);
+          skinPreferences?.remember({ mistMode: value });
+        }
+        ctx.effect(() => {
+          const preferences = createSkinPersistence(ctx.configForms.get('local-stylelab'), ctx.configForms.get('ui-theme'),
+            ctx.theme, id => noteThemeSelection(id), applyMistDecoration);
+          skinPreferences = preferences;
+          return () => { preferences.dispose(); };
+        });
+        function SkinSaveStatus() {
+          const saved = React.useSyncExternalStore(skinPreferences.subscribe, skinPreferences.getSnapshot);
+          return saved.error ? h('p', { className: 'sl-font-status', role: 'alert', 'data-error': true },
+            t('skinSaveFailed'), ' ', h('button', { className: 'sl-button', type: 'button', onClick: skinPreferences.retry }, t('skinRetry'))) : null;
         }
         function useMistDecoration() {
           return React.useSyncExternalStore(subscribeMistDecoration, getMistDecoration);
@@ -538,6 +685,7 @@ ${control}{font-family:var(--dsh-font-family-text,inherit);background:var(--dsw-
             try {
               noteThemeSelection(id);
               ctx.theme.setTheme(id);
+              skinPreferences.remember({ skinId: id });
               setSnapshot(ctx.theme.getTheme());
               setFailed(null);
             } catch (error) {
@@ -551,6 +699,7 @@ ${control}{font-family:var(--dsh-font-family-text,inherit);background:var(--dsw-
             h('div', { className: 'sl-wrap' },
               h('h1', { className: 'sl-title' }, t('title')),
               h(FontPicker),
+              h(SkinSaveStatus),
               h('div', { className: 'sl-list' }, options.map(option => {
                 const selected = snapshot.preference === option.id;
                 const label = t(failed === option.id ? 'error' : selected ? 'selected' : 'select');

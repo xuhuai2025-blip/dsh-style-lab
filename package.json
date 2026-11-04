@@ -1,6 +1,6 @@
 {
   "name": "dsh-style-lab",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "type": "module",
   "packageManager": "pnpm@11.28.5",
   "description": "风格工坊：原生主题、复古装饰和中英文字体组合。",
@@ -14,7 +14,7 @@
     "prepack": "node scripts/build.mjs && node --test tests/*.test.mjs"
   },
   "exports": {
-    ".": "./index.js",
+    ".": "./skin-preferences-host.js",
     "./client": "./client.js",
     "./fonts": "./simple-fonts-host.js",
     "./font-combinations": "./simple-fonts-host.js",
@@ -31,7 +31,8 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["index.js", "client.js", "simple-fonts-host.js", "simple-fonts-core.js", "simple-font-languages.json", "fonts/maple-NOTICE.md", "fonts/OFL-Maple.txt", "fonts/locale/*.json", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "LICENSE", "scripts/*.mjs", "tests/*.test.mjs"],
+  "peerDependencies": { "@deepseek-ai/schemastery": "~3.18.5" },
+  "files": ["index.js", "skin-preferences-host.js", "skin-preferences-core.js", "client.js", "simple-fonts-host.js", "simple-fonts-core.js", "simple-font-languages.json", "fonts/maple-NOTICE.md", "fonts/OFL-Maple.txt", "fonts/locale/*.json", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "LICENSE", "pnpm-workspace.yaml", "scripts/*.mjs", "tests/*.test.mjs"],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {

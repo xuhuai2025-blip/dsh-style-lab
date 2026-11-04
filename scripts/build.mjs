@@ -15,6 +15,8 @@ export function validatePackage() {
   assert.equal(manifest.license, 'MIT');
   assert.equal(Object.keys(manifest.dependencies ?? {}).length, 0, 'Runtime is self-contained apart from the host');
   assert.equal(Object.keys(manifest.devDependencies ?? {}).length, 0, 'Build and tests use Node built-ins only');
+  assert.deepEqual(manifest.peerDependencies, { '@deepseek-ai/schemastery': '~3.18.5' }, 'Only the native schema peer is permitted');
+  assert.equal(manifest.exports['.'], './skin-preferences-host.js');
   for (const name of ['preinstall', 'install', 'postinstall']) assert.equal(manifest.scripts[name], undefined);
 
   function expand(pattern) {
@@ -47,11 +49,12 @@ export function validatePackage() {
   for (const file of included) {
     assert.doesNotMatch(file, /(?:^|\/)(?:node_modules|font-sources|\.git)(?:\/|$)|\.(?:ttf|otf|woff2?|tgz|log)$/i);
     if (file.endsWith('.json')) JSON.parse(text(file));
-    // The distributable host modules may import only Node built-ins and included local modules.
+    // Only this Host schema entry may import the explicitly declared native Schemastery peer.
     if (file.endsWith('.js') && file !== 'client.js') {
       for (const match of text(file).matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) {
         const dependency = match[1];
         if (dependency.startsWith('node:')) continue;
+        if (file === 'skin-preferences-host.js' && dependency === '@deepseek-ai/schemastery') continue;
         assert.ok(dependency.startsWith('./'), `Unexpected external dependency in ${file}`);
         const local = relative(root, resolve(root, dirname(file), dependency)).replaceAll('\\', '/');
         assert.ok(included.has(local), `Local import omitted: ${local}`);

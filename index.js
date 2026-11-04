@@ -1,2 +1,2 @@
-/** StyleLab is a visual-only plugin. Theme state stays owned by ctx.theme. */
-export function apply() {}
+/** Compatibility entry; the package root points to the preferences Host entry. */
+export { Config, inject, apply, createSkinActions } from './skin-preferences-host.js';

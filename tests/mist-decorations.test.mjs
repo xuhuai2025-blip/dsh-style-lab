@@ -171,9 +171,14 @@ test('source wiring shares context-owned view state between selector, active mat
   assert.match(text, /let mistDecoration = 'hud'/);
   assert.match(text, /new Set\(\)/);
   assert.match(text, /function setMistDecoration\(\w+\)/);
-  const setter = text.slice(text.indexOf('function setMistDecoration('), text.indexOf('function useMistDecoration('));
+  const raw = text.slice(text.indexOf('function applyMistDecoration('), text.indexOf('function setMistDecoration('));
+  const setter = text.slice(text.indexOf('function setMistDecoration('), text.indexOf('        ctx.effect(', text.indexOf('function setMistDecoration(')));
+  assert.match(raw, /MIST_STYLES\.includes\(/);
+  assert.match(raw, /(?:mistDecoration === \w+|\w+ === mistDecoration)/);
+  assert.doesNotMatch(raw, /remember\(|\.mutate\(/);
   assert.match(setter, /MIST_STYLES\.includes\(/);
-  assert.match(setter, /(?:mistDecoration === \w+|\w+ === mistDecoration)/);
+  assert.match(setter, /applyMistDecoration\(value\)/);
+  assert.match(setter, /skinPreferences\?\.remember\(\{ mistMode: value \}\)/);
   assert.match(text, /React\.useSyncExternalStore\(subscribeMistDecoration, getMistDecoration\)/);
   assert.match(text, /ctx\.effect\(\(\) => \(\) => mist[^\n]*\.clear\(\)\)/);
   const material = text.slice(text.indexOf('function ThemeMaterial()'), text.indexOf('function OatVintage()'));

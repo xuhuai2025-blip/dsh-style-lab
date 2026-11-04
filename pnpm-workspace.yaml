@@ -1,0 +1,4 @@
+# This standalone package uses only the schema peer supplied by Harness.
+packages:
+  - '.'
+autoInstallPeers: false

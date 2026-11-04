@@ -28,7 +28,7 @@ function adoptedSnapshot(preference, patch = {}) {
 }
 
 /** Stable reference snapshots with explicit domain events and an owned deferred queue. */
-function harness({ preference = themes[0].id, durable = 'system', initialTheme, initialScope } = {}) {
+function harness({ preference = themes[0].id, durable = 'system', initialTheme, initialScope, onAcceptedSelection } = {}) {
   let currentTheme = initialTheme ?? snapshot(preference);
   let currentScope = initialScope ?? ready(durable);
   const listeners = new Set();
@@ -50,7 +50,7 @@ function harness({ preference = themes[0].id, durable = 'system', initialTheme, 
   const guard = createGuard(theme, form, listener => {
     listeners.add(listener);
     return () => { disposals += 1; listeners.delete(listener); };
-  }, callback => { schedules += 1; deferred.push(callback); });
+  }, callback => { schedules += 1; deferred.push(callback); }, onAcceptedSelection);
   return {
     guard, restores, deferred,
     get current() { return currentTheme; },
@@ -422,7 +422,7 @@ test('public ConfigForm dependency and owned guard wiring avoid service patches 
   const inject = source.match(/^\s*inject:\s*\[([^\]]+)\]/m)[1];
   assert.match(inject, /'configForms'/);
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings'));
-  assert.match(source, /createThemeRefreshGuard\(ctx\.theme,\s*ctx\.configForms\.get\('ui-theme'\),\s*listener => ctx\.on\('theme\/change', listener\),\s*queueMicrotask\)/);
+  assert.match(source, /createThemeRefreshGuard\(ctx\.theme,\s*ctx\.configForms\.get\('ui-theme'\),\s*listener => ctx\.on\('theme\/change', listener\),\s*queueMicrotask(?:\s*,|\))/);
   const binding = source.match(/const (\w+) = createThemeRefreshGuard\(ctx\.theme,/);
   assert.ok(binding);
   const guardName = binding[1];
@@ -435,6 +435,68 @@ test('public ConfigForm dependency and owned guard wiring avoid service patches 
   assert.ok(choose.indexOf(`${hook[1]}(id)`) < choose.indexOf('ctx.theme.setTheme(id)'));
   assert.match(source, new RegExp(`${guardName}\\.dispose`));
   const guardStart = helperSource.indexOf('function createThemeRefreshGuard(');
-  const guardCode = helperSource.slice(guardStart);
+  const persistenceStart = helperSource.indexOf('function createSkinPersistence(', guardStart);
+  const guardCode = helperSource.slice(guardStart, persistenceStart < 0 ? undefined : persistenceStart);
   assert.doesNotMatch(guardCode, /\.update\(|\.replace\(|ctx\.|remote\.|localStorage|sessionStorage|document\.|React\.|\.setTheme\s*=/);
+});
+
+for (const builtin of builtins) {
+  test(`accepted-selection callback records true external ${builtin} intent but not its settings echo`, () => {
+    const accepted = [];
+    const h = harness({ onAcceptedSelection: id => accepted.push(id) });
+    h.externalSet(builtin);
+    assert.deepEqual(accepted, [builtin]);
+    h.refresh({}, ready(builtin));
+    h.flush();
+    assert.deepEqual(accepted, [builtin]);
+    assert.deepEqual(h.restores, []);
+  });
+}
+
+test('accepted-selection callback records a remote durable appearance change once, not later same-preference model waves', () => {
+  const accepted = [];
+  const h = harness({ onAcceptedSelection: id => accepted.push(id) });
+  const before = h.current;
+  h.refresh({}, ready('dark'));
+  assert.notEqual(h.current.fontFamilies, before.fontFamilies);
+  assert.notEqual(h.current.fontSizes, before.fontSizes);
+  h.flush();
+  assert.equal(h.current.preference, 'dark');
+  assert.deepEqual(accepted, ['dark']);
+  assert.deepEqual(h.restores, []);
+  h.refresh({}, ready('dark', { model: 'new-model' }));
+  h.refresh({ fontFamilies: maple, fontSizes: { ...sizes, text: 18 } }, ready('dark'));
+  h.flush();
+  assert.deepEqual(accepted, ['dark']);
+  assert.deepEqual(h.restores, []);
+});
+
+test('accepted-selection callback records an external owned skin change, not a marked startup/UI selection', () => {
+  const accepted = [];
+  const h = harness({ onAcceptedSelection: id => accepted.push(id) });
+  h.externalSet(themes[1].id);
+  assert.deepEqual(accepted, [themes[1].id]);
+  h.choose(themes[2].id);
+  h.choose('system');
+  assert.deepEqual(accepted, [themes[1].id]);
+});
+
+test('background model/font/size adoption, automatic restoration and registry waves never notify accepted selection', () => {
+  const accepted = [];
+  const h = harness({ onAcceptedSelection: id => accepted.push(id) });
+  h.refresh({ fontFamilies: maple, fontSizes: { ...sizes, text: 20 } });
+  h.publish({ themes: [...themes], tokens: { changed: true } });
+  h.flush();
+  assert.deepEqual(h.restores, [themes[0].id]);
+  assert.deepEqual(accepted, []);
+});
+
+test('unregister fallback and disposed events do not persist a synthetic native selection', () => {
+  const accepted = [];
+  const h = harness({ onAcceptedSelection: id => accepted.push(id) });
+  h.publish({ preference: 'system', themes: themes.slice(1) });
+  assert.deepEqual(accepted, []);
+  h.guard.dispose();
+  h.externalSet('dark');
+  assert.deepEqual(accepted, []);
 });

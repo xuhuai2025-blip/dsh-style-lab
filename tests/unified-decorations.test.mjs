@@ -103,16 +103,20 @@ test('fixed Oat and Notebook defaults preserve existing artwork without mutable 
   assert.doesNotMatch(source, /type: 'checkbox'|sl-checkbox|notebookWidgets|t\('palette'\)/);
 });
 
-test('Mist alone retains view-only validated state and disposal; decoration selection never writes fonts or settings', () => {
+test('Mist keeps validated immediate state and delegates persistence without writing fonts or native appearance', () => {
   assert.match(source, /let mistDecoration = 'hud'/);
   assert.match(source, /const mistListeners = new Set\(\)/);
   assert.match(source, /ctx\.effect\(\(\) => \(\) => mistListeners\.clear\(\)\)/);
-  const setter = component('setMistDecoration');
-  assert.match(setter, /MIST_STYLES\.includes\(value\)/);
-  assert.match(setter, /(?:value === mistDecoration|mistDecoration === value)/);
-  assert.match(setter, /mistDecoration = value/);
+  const raw = component('applyMistDecoration');
+  const setter = component('setMistDecoration').split('\n        ctx.effect(')[0];
+  assert.match(raw, /MIST_STYLES\.includes\(value\)/);
+  assert.match(raw, /(?:value === mistDecoration|mistDecoration === value)/);
+  assert.match(raw, /mistDecoration = value/);
+  assert.doesNotMatch(raw, /remember\(|\.mutate\(/);
+  assert.match(setter, /applyMistDecoration\(value\)/);
+  assert.match(setter, /skinPreferences\?\.remember\(\{ mistMode: value \}\)/);
   assert.match(source, /React\.useSyncExternalStore\(subscribeMistDecoration, getMistDecoration\)/);
-  const controls = ['DecorationPicker', 'OatControls', 'MistControls', 'NotebookControls', 'setMistDecoration'].map(component).join('\n');
+  const controls = ['DecorationPicker', 'OatControls', 'MistControls', 'NotebookControls'].map(component).join('\n') + raw + setter;
   assert.doesNotMatch(controls, /ctx\.(?:remote|settings|theme)|saveFonts|setFont|localStorage|sessionStorage|fetch\(|document\./);
 });
 
